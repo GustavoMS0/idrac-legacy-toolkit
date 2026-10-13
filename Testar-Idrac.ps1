@@ -27,6 +27,14 @@ param(
 )
 . (Join-Path $PSScriptRoot 'IdracComum.ps1')
 
+Write-Host "┌─────────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
+Write-Host "│          DELL iDRAC LEGACY TOOLKIT - DIAGNOSTICO TLS        │" -ForegroundColor Cyan
+Write-Host "│      Varredura de TLS, cifras, certificados e firmware      │" -ForegroundColor DarkGray
+Write-Host "├─────────────────────────────────────────────────────────────┤" -ForegroundColor Cyan
+Write-Host "│  Autor:   Gustavo Martins (@GustavoMS0)                     │" -ForegroundColor White
+Write-Host "│  Projeto: https://github.com/GustavoMS0/idrac-legacy-toolkit│" -ForegroundColor DarkGray
+Write-Host "└─────────────────────────────────────────────────────────────┘`n" -ForegroundColor Cyan
+
 if (-not (Get-OpenSsl)) { Write-Host 'openssl.exe nao encontrado. Instale o Git for Windows.' -ForegroundColor Red; exit 1 }
 
 $alvos = if ($Ip) { $Ip | ForEach-Object { [pscustomobject]@{ Nome = $_; IP = $_ } } } else { Get-ListaServidores }

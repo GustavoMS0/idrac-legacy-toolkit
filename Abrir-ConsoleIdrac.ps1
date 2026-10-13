@@ -25,6 +25,18 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'IdracComum.ps1')
 
+function Show-Banner {
+    Write-Host "┌─────────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
+    Write-Host "│            DELL iDRAC LEGACY TOOLKIT - KVM VIRTUAL          │" -ForegroundColor Cyan
+    Write-Host "│      Console KVM & Diagnostico TLS para iDRAC 6 / 7 / 8     │" -ForegroundColor DarkGray
+    Write-Host "├─────────────────────────────────────────────────────────────┤" -ForegroundColor Cyan
+    Write-Host "│  Autor:   Gustavo Martins (@GustavoMS0)                     │" -ForegroundColor White
+    Write-Host "│  Projeto: https://github.com/GustavoMS0/idrac-legacy-toolkit│" -ForegroundColor DarkGray
+    Write-Host "└─────────────────────────────────────────────────────────────┘`n" -ForegroundColor Cyan
+}
+
+Show-Banner
+
 function Sair([string]$Mensagem) { Write-Host $Mensagem -ForegroundColor Red; Read-Host 'Enter para sair'; exit 1 }
 
 # --- Java 8 (32 ou 64 bits) ---
@@ -43,7 +55,7 @@ $arq = if ($versaoJava -match '64-Bit') { 'Win64' } else { 'Win32' }
 # --- Escolha do servidor ---
 if (-not $Ip) {
     $servidores = Get-ListaServidores
-    Write-Host "`n=== Console Virtual iDRAC ===`n"
+    Write-Host "--- Servidores Disponiveis ---`n" -ForegroundColor DarkCyan
     for ($k = 0; $k -lt $servidores.Count; $k++) { Write-Host ("  {0}) {1,-20} {2}" -f ($k + 1), $servidores[$k].Nome, $servidores[$k].IP) }
     $escolha = Read-Host "`nNumero da lista ou IP"
     if ($escolha -match '^\d+$' -and [int]$escolha -ge 1 -and [int]$escolha -le $servidores.Count) { $Ip = $servidores[[int]$escolha - 1].IP }
