@@ -1,3 +1,13 @@
+# Propriedades de seguranca usadas SOMENTE pelo processo Java do console (-Djava.security.properties).
+# O Java do sistema nao e alterado.
+#
+# jdk.tls.* / jdk.certpath.*: iDRAC6/7/8 usam TLS 1.0, RC4/3DES, chaves RSA de 1024 bits e certificados
+# MD5/SHA-1 na porta do console; sem liberar esses algoritmos o Java 8 atual recusa a conexao.
+#
+# jdk.jar.disabledAlgorithms: os jars avct* sao assinados com algoritmos antigos (MD5/SHA-1, RSA 1024).
+# Mantido vazio porque nao foi possivel confirmar em todos os firmwares que o console funciona com o
+# padrao do JDK. A assinatura dos jars nao e a protecao usada aqui: o Abrir-ConsoleIdrac.ps1 fixa o
+# certificado do iDRAC no primeiro acesso e confere o SHA-256 de cada jar/dll do cache antes de executar.
 jdk.tls.disabledAlgorithms=
 jdk.certpath.disabledAlgorithms=
 jdk.jar.disabledAlgorithms=

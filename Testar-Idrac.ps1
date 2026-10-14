@@ -1,3 +1,4 @@
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Diagnostica iDRACs antigos: geracao, versoes de TLS, cifras da porta do console, certificado e firmware.
@@ -25,6 +26,9 @@ param(
     [string[]]$Ip,
     [pscredential]$Credencial
 )
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'IdracComum.ps1')
 
 Write-Host "┌─────────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
@@ -37,7 +41,12 @@ Write-Host "└─────────────────────�
 
 if (-not (Get-OpenSsl)) { Write-Host 'openssl.exe nao encontrado. Instale o Git for Windows.' -ForegroundColor Red; exit 1 }
 
-$alvos = if ($Ip) { $Ip | ForEach-Object { [pscustomobject]@{ Nome = $_; IP = $_ } } } else { Get-ListaServidores }
+$alvos = if ($Ip) {
+    foreach ($i in $Ip) {
+        if (Test-IpValido $i) { [pscustomobject]@{ Nome = $i; IP = $i } }
+        else { Write-Host "IP invalido ignorado: $i" -ForegroundColor Yellow }
+    }
+} else { Get-ListaServidores }
 if (-not $alvos) { Write-Host 'Informe -Ip ou crie o servidores.txt (veja servidores.exemplo.txt).' -ForegroundColor Yellow; exit 1 }
 
 $resultado = foreach ($s in $alvos) {
@@ -51,10 +60,10 @@ $resultado = foreach ($s in $alvos) {
 
     $info.Geracao = Get-GeracaoIdrac $s.IP
 
-    $tls = foreach ($v in 'tls1', 'tls1_1', 'tls1_2', 'tls1_3') {
+    $tls = @(foreach ($v in 'tls1', 'tls1_1', 'tls1_2', 'tls1_3') {
         $cifra = if ($v -eq 'tls1_3') { 'ALL' } else { 'ALL:@SECLEVEL=0' }
         if (Test-TlsOpenSsl -Ip $s.IP -Versao $v -Cifra $cifra) { $v -replace 'tls1_?', 'TLS1.' -replace 'TLS1\.$', 'TLS1.0' }
-    }
+    })
     $info.TLS443 = ($tls -join ' ')
     if ($tls -notcontains 'TLS1.2' -and $tls -notcontains 'TLS1.3') {
         $avisos.Add('So aceita TLS 1.0/1.1: Chrome/Edge/Firefox atuais dao ERR_SSL_VERSION_OR_CIPHER_MISMATCH. Atualize o firmware.')
@@ -68,18 +77,26 @@ $resultado = foreach ($s in $alvos) {
         }
     }
 
-    $ssl = Get-OpenSsl
-    $fim = cmd /c "`"$ssl`" s_client -connect $($s.IP):443 -cipher ALL:@SECLEVEL=0 < NUL 2>NUL | `"$ssl`" x509 -noout -enddate 2>NUL"
-    if ("$fim" -match 'notAfter=(\w{3})\s+(\d+)\s+([\d:]+)\s+(\d{4})') {
-        $validade = [datetime]::ParseExact("$($Matches[1]) $($Matches[2]) $($Matches[3]) $($Matches[4])", 'MMM d HH:mm:ss yyyy', [Globalization.CultureInfo]::InvariantCulture)
-        $info.CertValidoAte = $validade.ToString('yyyy-MM-dd')
-        if ($validade -lt (Get-Date)) { $avisos.Add('Certificado vencido: gere um novo (iDRAC6: racadm sslresetcfg).') }
+    # Certificado: validade e conferencia com o pin (trust-on-first-use, cache\<IP>\cert.sha256)
+    $impressao = $null
+    try {
+        $cert = Get-CertificadoIdrac -Ip $s.IP
+        $info.CertValidoAte = $cert.NotAfter.ToString('yyyy-MM-dd')
+        if ($cert.NotAfter -lt (Get-Date)) { $avisos.Add('Certificado vencido: gere um novo (iDRAC6: racadm sslresetcfg).') }
+        $info.CertSHA256 = Get-Sha256Hex $cert.RawData
+        Assert-PinIdrac -Ip $s.IP -Impressao $info.CertSHA256
+        $impressao = $info.CertSHA256
+    } catch {
+        $avisos.Add("Certificado: $($_.Exception.Message -replace '\s*\r?\n\s*', ' ')")
     }
 
-    if ($Credencial -and $info.Geracao -notmatch 'iDRAC6') {
+    if ($Credencial -and $impressao -and $info.Geracao -notmatch 'iDRAC6') {
         try {
-            Set-AceitaCertificadoIdrac
-            $m = Invoke-RestMethod -Uri "https://$($s.IP)/redfish/v1/Managers/iDRAC.Embedded.1" -Credential $Credencial -TimeoutSec 30
+            $web = Get-ParametrosWebIdrac
+            $url = "https://$($s.IP)/redfish/v1/Managers/iDRAC.Embedded.1"
+            $m = Invoke-ComCertificadoIdrac -Ip $s.IP -Impressao $impressao -Bloco {
+                Invoke-RestMethod @web -Uri $url -Credential $Credencial -TimeoutSec 30
+            }
             $info.Firmware = $m.FirmwareVersion
             if ($info.Geracao -match 'iDRAC8' -and [version]$m.FirmwareVersion -lt [version]'2.86.86.86') {
                 $avisos.Add("Firmware $($m.FirmwareVersion) desatualizado (ultimo iDRAC8: 2.86.86.86; a partir de < 2.70 passe antes pela 2.70.70.70).")
